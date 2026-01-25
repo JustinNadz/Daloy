@@ -1,108 +1,106 @@
-import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { postService } from "@/services";
+import { useToast } from "@/hooks/use-toast";
 import PostComposer from "./PostComposer";
 import PostCard from "./PostCard";
+import { Loader2 } from "lucide-react";
 
-const initialPosts = [
-  {
-    id: "1",
-    author: {
-      name: "Elena Cruz",
-      handle: "@elena_cruz",
-      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
-    },
-    time: "2h",
-    content: "Just arrived in Siargao! The waves are incredible today. Can't wait to hit the surf 🌊 #IslandLife",
-    image: "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=800&h=400&fit=crop",
-    stats: { likes: 245, comments: 32, reposts: 12 },
-  },
-  {
-    id: "2",
-    author: {
-      name: "Tech Daily",
-      handle: "@techdaily",
-      avatar: "https://images.unsplash.com/photo-1535303311164-664fc9ec6532?w=100&h=100&fit=crop",
-    },
-    time: "5h",
-    content: "The new framework updates are mind-blowing. The performance gains we're seeing in production are over 40%. Huge props to the open source community! ⚡🎵",
-    stats: { likes: 1200, comments: 89, reposts: 450 },
-  },
-  {
-    id: "3",
-    author: {
-      name: "Music Vibes",
-      handle: "@musicvibes",
-      avatar: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop",
-    },
-    time: "8h",
-    content: "Current mood: Late night coding sessions with lo-fi beats. 🎧🌙",
-    musicCard: {
-      title: "Midnight Lo-Fi Stream",
-      artist: "ChillHop Records",
-    },
-    stats: { likes: 89, comments: 12, reposts: 4, shares: 4 },
-  },
-];
+// Helper function to format time
+const formatTime = (dateString) => {
+  if (!dateString) return '';
+  if (dateString === 'now') return 'now';
+  
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) return 'now';
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 7) return `${diffDays}d`;
+  
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
 
 const Feed = ({ activeTab, onTabChange }) => {
-  const [posts, setPosts] = useState(initialPosts);
-  const [likedPosts, setLikedPosts] = useState(new Set());
-  const [repostedPosts, setRepostedPosts] = useState(new Set());
-  const [bookmarkedPosts, setBookmarkedPosts] = useState(new Set());
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const handleNewPost = (content) => {
-    const newPost = {
-      id: Date.now().toString(),
-      author: {
-        name: "Marcus Chen",
-        handle: "@marcus_flow",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
-      },
-      time: "now",
-      content,
-      stats: { likes: 0, comments: 0, reposts: 0 },
-    };
-    setPosts([newPost, ...posts]);
+  // Fetch posts based on active tab
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['feed', activeTab],
+    queryFn: () => activeTab === 'following' 
+      ? postService.getFeed() 
+      : postService.getExplore(),
+  });
+
+  // Create post mutation
+  const createPostMutation = useMutation({
+    mutationFn: (postData) => postService.createPost(postData),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['feed']);
+      toast({
+        title: "Posted!",
+        description: "Your post has been shared.",
+      });
+    },
+    onError: (err) => {
+      toast({
+        title: "Error",
+        description: err.response?.data?.message || "Failed to create post",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Like mutation
+  const likeMutation = useMutation({
+    mutationFn: ({ postId, isLiked }) => 
+      isLiked ? postService.unlikePost(postId) : postService.likePost(postId),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['feed']);
+    },
+  });
+
+  // Repost mutation
+  const repostMutation = useMutation({
+    mutationFn: ({ postId, isReposted }) =>
+      isReposted ? postService.undoRepost(postId) : postService.repost(postId),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['feed']);
+    },
+  });
+
+  // Bookmark mutation
+  const bookmarkMutation = useMutation({
+    mutationFn: ({ postId, isBookmarked }) =>
+      isBookmarked ? postService.unbookmarkPost(postId) : postService.bookmarkPost(postId),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['feed']);
+    },
+  });
+
+  const handleNewPost = (content, mediaIds = []) => {
+    createPostMutation.mutate({ content, media_ids: mediaIds });
   };
 
-  const handleLike = (id) => {
-    setLikedPosts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
+  const handleLike = (id, isLiked) => {
+    likeMutation.mutate({ postId: id, isLiked });
   };
 
-  const handleRepost = (id) => {
-    setRepostedPosts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
+  const handleRepost = (id, isReposted) => {
+    repostMutation.mutate({ postId: id, isReposted });
   };
 
-  const handleBookmark = (id) => {
-    setBookmarkedPosts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
+  const handleBookmark = (id, isBookmarked) => {
+    bookmarkMutation.mutate({ postId: id, isBookmarked });
   };
 
-  const displayPosts = activeTab === "following"
-    ? posts.filter((_, i) => i % 2 === 0)
-    : posts;
+  const posts = data?.data?.posts || data?.data?.data || [];
 
   return (
     <div className="flex-1 min-w-0 max-w-[600px] py-3">
@@ -137,17 +135,56 @@ const Feed = ({ activeTab, onTabChange }) => {
       </div>
 
       {/* Composer */}
-      <PostComposer onPost={handleNewPost} />
+      <PostComposer onPost={handleNewPost} isLoading={createPostMutation.isPending} />
+
+      {/* Loading state */}
+      {isLoading && (
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      )}
+
+      {/* Error state */}
+      {error && (
+        <div className="bg-destructive/10 text-destructive rounded-2xl p-4 mb-4 text-center">
+          <p>Failed to load posts. Please try again.</p>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!isLoading && !error && posts.length === 0 && (
+        <div className="bg-card rounded-2xl p-8 text-center">
+          <p className="text-muted-foreground mb-2">No posts yet</p>
+          <p className="text-sm text-muted-foreground">
+            {activeTab === "following"
+              ? "Follow some people to see their posts here!"
+              : "Be the first to post something!"}
+          </p>
+        </div>
+      )}
 
       {/* Posts */}
       <div className="space-y-0">
-        {displayPosts.map((post) => (
+        {posts.map((post) => (
           <PostCard
             key={post.id}
-            {...post}
-            isLiked={likedPosts.has(post.id)}
-            isReposted={repostedPosts.has(post.id)}
-            isBookmarked={bookmarkedPosts.has(post.id)}
+            id={post.id}
+            author={{
+              name: post.user?.name || post.author?.name,
+              handle: `@${post.user?.username || post.author?.handle?.replace('@', '')}`,
+              avatar: post.user?.avatar || post.author?.avatar,
+            }}
+            time={formatTime(post.created_at || post.time)}
+            content={post.content}
+            image={post.media?.[0]?.url || post.image}
+            stats={{
+              likes: post.reactions_count || post.stats?.likes || 0,
+              comments: post.comments_count || post.stats?.comments || 0,
+              reposts: post.reposts_count || post.stats?.reposts || 0,
+            }}
+            isLiked={post.is_liked || false}
+            isReposted={post.is_reposted || false}
+            isBookmarked={post.is_bookmarked || false}
             onLike={handleLike}
             onRepost={handleRepost}
             onBookmark={handleBookmark}

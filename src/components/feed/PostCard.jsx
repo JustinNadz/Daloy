@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Heart, MessageCircle, Repeat2, Share, Play, Bookmark } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +37,7 @@ const PostCard = ({
   };
 
   const handleShare = () => {
+    navigator.clipboard?.writeText(`${window.location.origin}/post/${id}`);
     toast({
       title: "Shared!",
       description: "Link copied to clipboard!",
@@ -50,17 +52,26 @@ const PostCard = ({
     });
   };
 
+  const username = author.handle?.replace('@', '') || author.username;
+
   return (
     <article className="bg-card rounded-2xl p-4 mb-4 hover:bg-post-hover transition-all duration-200 cursor-pointer group">
       <div className="flex gap-3">
-        <Avatar className="w-10 h-10 shrink-0 ring-2 ring-transparent group-hover:ring-primary/10 transition-all">
-          <AvatarImage src={author.avatar} />
-          <AvatarFallback>{author.name.charAt(0)}</AvatarFallback>
-        </Avatar>
+        <Link to={`/${username}`}>
+          <Avatar className="w-10 h-10 shrink-0 ring-2 ring-transparent group-hover:ring-primary/10 transition-all">
+            <AvatarImage src={author.avatar} />
+            <AvatarFallback>{author.name?.charAt(0)}</AvatarFallback>
+          </Avatar>
+        </Link>
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-center gap-2 mb-1">
-            <span className="font-semibold text-sm text-foreground hover:underline cursor-pointer">{author.name}</span>
+            <Link to={`/${username}`} className="font-semibold text-sm text-foreground hover:underline">
+              {author.name}
+            </Link>
+            <Link to={`/${username}`} className="text-muted-foreground text-sm hover:underline">
+              {author.handle}
+            </Link>
             <span className="text-muted-foreground text-sm">· {time}</span>
           </div>
 
@@ -109,35 +120,35 @@ const PostCard = ({
           <div className="flex items-center justify-between text-engagement">
             <button 
               className={`flex items-center gap-2 transition-all duration-200 group/btn hover:scale-105 ${isLiked ? 'text-destructive' : 'hover:text-destructive'}`}
-              onClick={() => onLike(id)}
+              onClick={() => onLike && onLike(id, isLiked)}
             >
               <Heart className={`w-4 h-4 transition-all ${isLiked ? 'fill-destructive scale-110' : 'group-hover/btn:scale-110'}`} />
-              <span className="text-sm">{formatNumber(stats.likes + (isLiked ? 1 : 0))}</span>
+              <span className="text-sm">{formatNumber(stats?.likes || 0)}</span>
             </button>
             <button 
               className="flex items-center gap-2 hover:text-primary transition-all duration-200 group/btn hover:scale-105"
               onClick={handleComment}
             >
               <MessageCircle className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
-              <span className="text-sm">{formatNumber(stats.comments)}</span>
+              <span className="text-sm">{formatNumber(stats?.comments || 0)}</span>
             </button>
             <button 
               className={`flex items-center gap-2 transition-all duration-200 group/btn hover:scale-105 ${isReposted ? 'text-green-500' : 'hover:text-green-500'}`}
-              onClick={() => onRepost(id)}
+              onClick={() => onRepost && onRepost(id, isReposted)}
             >
               <Repeat2 className={`w-4 h-4 transition-all ${isReposted ? 'scale-110' : 'group-hover/btn:scale-110'}`} />
-              <span className="text-sm">{formatNumber(stats.reposts + (isReposted ? 1 : 0))}</span>
+              <span className="text-sm">{formatNumber(stats?.reposts || 0)}</span>
             </button>
             <button 
               className="flex items-center gap-2 hover:text-primary transition-all duration-200 group/btn hover:scale-105"
               onClick={handleShare}
             >
               <Share className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
-              {stats.shares !== undefined && <span className="text-sm">{formatNumber(stats.shares)}</span>}
+              {stats?.shares !== undefined && <span className="text-sm">{formatNumber(stats.shares)}</span>}
             </button>
             <button 
               className={`flex items-center gap-2 transition-all duration-200 group/btn hover:scale-105 ${isBookmarked ? 'text-primary' : 'hover:text-primary'}`}
-              onClick={() => onBookmark(id)}
+              onClick={() => onBookmark && onBookmark(id, isBookmarked)}
             >
               <Bookmark className={`w-4 h-4 transition-all ${isBookmarked ? 'fill-primary scale-110' : 'group-hover/btn:scale-110'}`} />
             </button>
