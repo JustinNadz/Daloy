@@ -37,17 +37,44 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     }
-    
+
     // Handle 403 Forbidden
     if (error.response?.status === 403) {
       console.error('Access forbidden:', error.response?.data?.message)
     }
-    
+
+    // Handle 429 Too Many Requests (Rate Limiting)
+    if (error.response?.status === 429) {
+      const retryAfter = error.response?.headers?.['retry-after'];
+      const endpoint = error.config?.url || '';
+
+      let message = 'Too many requests. Please slow down.';
+
+      // Customize message based on endpoint
+      if (endpoint.includes('/login')) {
+        message = 'Too many login attempts. Please wait a moment and try again.';
+      } else if (endpoint.includes('/register')) {
+        message = 'Too many registration attempts. Please try again in an hour.';
+      } else if (endpoint.includes('/posts') && error.config?.method === 'post') {
+        message = "You've reached your daily post limit (50 posts). Please try again tomorrow.";
+      } else if (endpoint.includes('/comments')) {
+        message = "You've reached your daily comment limit (100 comments). Please try again tomorrow.";
+      }
+
+      if (retryAfter) {
+        const minutes = Math.ceil(retryAfter / 60);
+        message += ` Try again in ${minutes} minute${minutes > 1 ? 's' : ''}.`;
+      }
+
+      console.warn('Rate limit exceeded:', message);
+      error.rateLimitMessage = message;
+    }
+
     // Handle 500 Server Error
     if (error.response?.status >= 500) {
       console.error('Server error:', error.response?.data?.message)
     }
-    
+
     return Promise.reject(error)
   }
 )

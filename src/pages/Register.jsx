@@ -6,17 +6,22 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
+import ReCAPTCHA from 'react-google-recaptcha'
+import GoogleLoginButton from '@/components/GoogleLoginButton'
+import FacebookLoginButton from '@/components/FacebookLoginButton'
 
 const Register = () => {
   const [formData, setFormData] = useState({
-    name: '',
+    display_name: '',
     username: '',
     email: '',
     password: '',
     password_confirmation: '',
   })
   const [showPassword, setShowPassword] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [recaptchaToken, setRecaptchaToken] = useState('')
   const { register } = useAuth()
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -27,6 +32,26 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    // Real-time validation: ToS acceptance required
+    if (!acceptedTerms) {
+      toast({
+        title: 'Terms Required',
+        description: 'You must accept the Terms of Service and Privacy Policy',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    // Real-time validation: reCAPTCHA required
+    if (!recaptchaToken) {
+      toast({
+        title: 'Verification Required',
+        description: 'Please complete the reCAPTCHA verification',
+        variant: 'destructive',
+      })
+      return
+    }
 
     if (formData.password !== formData.password_confirmation) {
       toast({
@@ -49,16 +74,22 @@ const Register = () => {
     setIsLoading(true)
 
     try {
-      await register(formData)
+      // Include reCAPTCHA token
+      await register({ ...formData, recaptcha_token: recaptchaToken })
       toast({
         title: 'Welcome to Daloy!',
         description: 'Your account has been created successfully.',
       })
-      navigate('/')
+      navigate('/', { replace: true })
     } catch (err) {
+      console.error('Registration error:', err)
+      console.error('Error response:', err.response)
+      console.error('Error data:', err.response?.data)
+      console.error('Validation errors:', err.response?.data?.errors)
+
       const errors = err.response?.data?.errors
       const message = errors
-        ? Object.values(errors).flat().join(', ')
+        ? Object.entries(errors).map(([field, msgs]) => `${field}: ${msgs.join(', ')}`).join('\n')
         : err.response?.data?.message || 'Registration failed'
       toast({
         title: 'Registration failed',
@@ -80,15 +111,31 @@ const Register = () => {
             <p className="text-muted-foreground">Create your account</p>
           </div>
 
+          {/* Google Sign-Up */}
+          <GoogleLoginButton mode="signup" />
+
+          {/* Facebook Sign-Up */}
+          <FacebookLoginButton mode="signup" />
+
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="display_name">Full Name</Label>
               <Input
-                id="name"
-                name="name"
+                id="display_name"
+                name="display_name"
                 type="text"
                 placeholder="John Doe"
-                value={formData.name}
+                value={formData.display_name}
                 onChange={handleChange}
                 required
                 disabled={isLoading}
@@ -164,6 +211,39 @@ const Register = () => {
                 className="h-11"
               />
             </div>
+
+            {/* Terms of Service Acceptance - Real-time */}
+            <div className="flex items-start gap-3 pt-2">
+              <input
+                type="checkbox"
+                id="terms"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                required
+              />
+              <label htmlFor="terms" className="text-sm text-muted-foreground">
+                I agree to the{' '}
+                <Link to="/terms" className="text-primary hover:underline font-medium" target="_blank">
+                  Terms of Service
+                </Link>{' '}
+                and{' '}
+                <Link to="/privacy" className="text-primary hover:underline font-medium" target="_blank">
+                  Privacy Policy
+                </Link>
+              </label>
+            </div>
+
+            {/* reCAPTCHA - Real-time Bot Protection */}
+            {import.meta.env.VITE_RECAPTCHA_SITE_KEY && (
+              <div className="flex justify-center">
+                <ReCAPTCHA
+                  sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                  onChange={setRecaptchaToken}
+                  theme="light"
+                />
+              </div>
+            )}
 
             <Button
               type="submit"

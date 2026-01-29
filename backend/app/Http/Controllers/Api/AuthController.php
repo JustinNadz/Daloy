@@ -4,10 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules\Password;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -31,11 +36,19 @@ class AuthController extends Controller
             'display_name' => $validated['display_name'],
         ]);
 
+        // Record ToS acceptance timestamp (real-time)
+        $user->terms_accepted_at = now();
+        $user->save();
+
+        // Send email verification notification
+        $user->sendEmailVerificationNotification();
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return $this->success([
             'user' => $this->formatUser($user),
             'token' => $token,
+            'message' => 'Please check your email to verify your account.',
         ], 'Registration successful', 201);
     }
 
@@ -50,7 +63,7 @@ class AuthController extends Controller
         ]);
 
         $loginField = filter_var($validated['login'], FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
-        
+
         $user = User::where($loginField, $validated['login'])->first();
 
         if (!$user || !Hash::check($validated['password'], $user->password)) {
@@ -97,9 +110,9 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         $user = $request->user()->load(['acceptedFollowers', 'acceptedFollowing']);
-        
+
         return $this->success([
-            'user' => $this->formatUser($user, true),
+            'user' => $this->formatUser($user),
         ]);
     }
 
@@ -168,7 +181,7 @@ class AuthController extends Controller
         ]);
 
         $user = $request->user();
-        
+
         // Delete old avatar if exists
         if ($user->avatar) {
             \Storage::disk('public')->delete($user->avatar);
@@ -192,7 +205,7 @@ class AuthController extends Controller
         ]);
 
         $user = $request->user();
-        
+
         // Delete old cover photo if exists
         if ($user->cover_photo) {
             \Storage::disk('public')->delete($user->cover_photo);
@@ -207,13 +220,134 @@ class AuthController extends Controller
     }
 
     /**
+     * Verify email address.
+     */
+    public function verifyEmail(Request $request, $id, $hash)
+    {
+        $user = User::findOrFail($id);
+
+        if (!hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
+            return $this->error('Invalid verification link.', 403);
+        }
+
+        if ($user->hasVerifiedEmail()) {
+            return $this->success([
+                'message' => 'Email already verified.',
+            ]);
+        }
+
+        if ($user->markEmailAsVerified()) {
+            event(new Verified($user));
+        }
+
+        return $this->success([
+            'message' => 'Email verified successfully!',
+            'user' => $this->formatUser($user),
+        ]);
+    }
+
+    /**
+     * Resend email verification notification.
+     */
+    public function resendVerification(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->hasVerifiedEmail()) {
+            return $this->error('Email already verified.', 400);
+        }
+
+        $user->sendEmailVerificationNotification();
+
+        return $this->success([
+            'message' => 'Verification email resent successfully.',
+        ]);
+    }
+
+    /**
+     * Send password reset link.
+     */
+    public function sendResetLink(Request $request)
+    {
+        $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        // Check if user exists
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            // Don't reveal if email exists or not for security
+            return $this->success([
+                'message' => 'If that email address is registered, you will receive a password reset link.',
+            ]);
+        }
+
+        // Send password reset link
+        $status = Password::sendResetLink(
+            $request->only('email')
+        );
+
+        if ($status === Password::RESET_LINK_SENT) {
+            return $this->success([
+                'message' => 'Password reset link sent to your email.',
+            ]);
+        }
+
+        return $this->error(
+            'Failed to send password reset link. Please try again.',
+            500
+        );
+    }
+
+    /**
+     * Reset password.
+     */
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'token' => ['required'],
+            'email' => ['required', 'email'],
+            'password' => ['required', 'confirmed', PasswordRule::min(8)->mixedCase()->numbers()],
+        ]);
+
+        $status = Password::reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function (User $user, string $password) {
+                $user->forceFill([
+                    'password' => Hash::make($password)
+                ])->setRememberToken(Str::random(60));
+
+                $user->save();
+
+                event(new PasswordReset($user));
+            }
+        );
+
+        if ($status === Password::PASSWORD_RESET) {
+            return $this->success([
+                'message' => 'Password reset successfully. You can now log in with your new password.',
+            ]);
+        }
+
+        return $this->error(
+            $status === Password::INVALID_TOKEN
+            ? 'Invalid or expired reset token.'
+            : 'Failed to reset password. Please try again.',
+            400
+        );
+    }
+
+    /**
      * Format user data for response.
      */
-    private function formatUser(User $user, bool $includePrivate = false): array
+    private function formatUser(User $user)
     {
-        $data = [
+        return [
             'id' => $user->id,
             'username' => $user->username,
+            'email' => $user->email,
+            'email_verified_at' => $user->email_verified_at?->toISOString(),
             'display_name' => $user->display_name,
             'bio' => $user->bio,
             'avatar_url' => $user->avatar_url,

@@ -21,19 +21,28 @@ export const AuthProvider = ({ children }) => {
   }, [])
 
   const checkAuth = async () => {
+    console.log('[Auth] Checking authentication...')
     const token = localStorage.getItem('auth_token')
+    console.log('[Auth] Token found:', !!token)
+
     if (!token) {
+      console.log('[Auth] No token, setting loading to false')
       setLoading(false)
       return
     }
 
     try {
+      console.log('[Auth] Calling /auth/me endpoint...')
       const response = await authService.getMe()
-      setUser(response.data.user)
+      console.log('[Auth] Auth check successful, user:', response.data.data.user)
+      setUser(response.data.data.user)
     } catch (err) {
-      console.error('Auth check failed:', err)
+      console.error('[Auth] Auth check failed:', err)
+      console.error('[Auth] Error response:', err.response)
       localStorage.removeItem('auth_token')
+      setUser(null)
     } finally {
+      console.log('[Auth] Setting loading to false')
       setLoading(false)
     }
   }
@@ -41,10 +50,14 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     setError(null)
     try {
+      console.log('[Auth] Logging in...')
       const response = await authService.login(credentials)
-      localStorage.setItem('auth_token', response.data.token)
-      setUser(response.data.user)
-      return response.data
+      console.log('[Auth] Login successful, saving token and user')
+      console.log('[Auth] Full response:', response.data)
+      localStorage.setItem('auth_token', response.data.data.token)
+      setUser(response.data.data.user)
+      console.log('[Auth] User set:', response.data.data.user)
+      return response.data.data
     } catch (err) {
       const message = err.response?.data?.message || 'Login failed'
       setError(message)
@@ -56,9 +69,9 @@ export const AuthProvider = ({ children }) => {
     setError(null)
     try {
       const response = await authService.register(data)
-      localStorage.setItem('auth_token', response.data.token)
-      setUser(response.data.user)
-      return response.data
+      localStorage.setItem('auth_token', response.data.data.token)
+      setUser(response.data.data.user)
+      return response.data.data
     } catch (err) {
       const message = err.response?.data?.message || 'Registration failed'
       setError(message)
@@ -80,8 +93,8 @@ export const AuthProvider = ({ children }) => {
   const updateProfile = async (data) => {
     try {
       const response = await authService.updateProfile(data)
-      setUser(response.data.user)
-      return response.data
+      setUser(response.data.data.user)
+      return response.data.data
     } catch (err) {
       throw err
     }

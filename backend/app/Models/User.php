@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
@@ -33,6 +34,15 @@ class User extends Authenticatable
         'suspended_until',
         'suspension_reason',
         'last_active_at',
+        'terms_accepted_at',
+        'deletion_requested_at',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        'two_factor_enabled_at',
+        'oauth_provider',
+        'oauth_id',
+        'oauth_token',
+        'oauth_refresh_token',
     ];
 
     /**
@@ -58,11 +68,27 @@ class User extends Authenticatable
     ];
 
     /**
+     * Send the email verification notification.
+     */
+    public function sendEmailVerificationNotification()
+    {
+        $this->notify(new \App\Notifications\VerifyEmailNotification);
+    }
+
+    /**
+     * Send the password reset notification.
+     */
+    public function sendPasswordResetNotification($token)
+    {
+        $this->notify(new \App\Notifications\ResetPasswordNotification($token));
+    }
+
+    /**
      * Get the user's avatar URL.
      */
     public function getAvatarUrlAttribute(): string
     {
-        return $this->avatar 
+        return $this->avatar
             ? asset('storage/' . $this->avatar)
             : 'https://ui-avatars.com/api/?name=' . urlencode($this->display_name) . '&background=random';
     }

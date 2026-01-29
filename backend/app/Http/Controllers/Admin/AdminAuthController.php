@@ -15,11 +15,14 @@ class AdminAuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|email',
+            'email' => 'required|string',
             'password' => 'required',
         ]);
 
-        $admin = Admin::where('email', $request->email)->first();
+        // Allow login with email or username
+        $admin = Admin::where('email', $request->email)
+            ->orWhere('username', $request->email)
+            ->first();
 
         if (!$admin || !Hash::check($request->password, $admin->password)) {
             throw ValidationException::withMessages([

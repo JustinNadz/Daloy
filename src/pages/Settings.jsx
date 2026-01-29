@@ -1,18 +1,22 @@
 import { useState } from 'react'
-import { 
-  User, 
-  Bell, 
-  Lock, 
-  Shield, 
-  Palette, 
-  HelpCircle, 
+import {
+  User,
+  Bell,
+  Lock,
+  Shield,
+  Palette,
+  HelpCircle,
   LogOut,
   ChevronRight,
   Moon,
   Sun,
   Globe,
   Eye,
-  EyeOff
+  EyeOff,
+  Download,
+  Trash2,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -26,15 +30,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/useAuth'
-import { authService } from '@/services'
+import { authService, api } from '@/services'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useNavigate } from 'react-router-dom'
+import TwoFactorSetup from '@/components/TwoFactorSetup'
 
 const Settings = () => {
   const { user, logout, updateUser } = useAuth()
   const { toast } = useToast()
-  
+  const navigate = useNavigate()
+
   const [activeTab, setActiveTab] = useState('profile')
   const [loading, setLoading] = useState(false)
-  
+
+  // GDPR - Real-time account deletion
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+
   // Profile form state
   const [profile, setProfile] = useState({
     display_name: user?.display_name || '',
@@ -152,10 +166,89 @@ const Settings = () => {
     })
   }
 
+  // GDPR - Real-time data export
+  const handleExportData = async () => {
+    try {
+      setLoading(true)
+      const response = await api.get('/privacy/export-data')
+
+      // Create JSON file and trigger download
+      const blob = new Blob([JSON.stringify(response.data, null, 2)], {
+        type: 'application/json'
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `daloy-data-export-${new Date().toISOString().split('T')[0]}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+
+      toast({
+        title: "Data Exported",
+        description: "Your data has been downloaded successfully"
+      })
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: error.response?.data?.message || 'Failed to export data',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // GDPR - Real-time account deletion (30-day grace period)
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation !== 'DELETE MY ACCOUNT') {
+      toast({
+        title: 'Confirmation Required',
+        description: 'Please type "DELETE MY ACCOUNT" exactly',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    setIsDeleting(true)
+
+    try {
+      const response = await api.post('/privacy/delete-account', {
+        password: deletePassword,
+        confirmation: deleteConfirmation
+      })
+
+      toast({
+        title: 'Account Deletion Scheduled',
+        description: response.data.message || 'You have 30 days to cancel. Check your email.'
+      })
+
+      // Clear form and close dialog
+      setShowDeleteDialog(false)
+      setDeletePassword('')
+      setDeleteConfirmation('')
+
+      // Log out user
+      setTimeout(() => {
+        logout()
+        navigate('/login')
+      }, 2000)
+    } catch (error) {
+      toast({
+        title: 'Deletion Failed',
+        description: error.response?.data?.message || 'Failed to delete account',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   const settingsMenu = [
     { id: 'profile', label: 'Edit Profile', icon: User },
     { id: 'password', label: 'Password', icon: Lock },
-    { id: 'privacy', label: 'Privacy', icon: Shield },
+    { id: 'security', label: 'Security (2FA)', icon: Shield },
+    { id: 'privacy', label: 'Privacy', icon: Lock },
+    { id: 'data', label: 'Privacy & Data', icon: Download },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'help', label: 'Help & Support', icon: HelpCircle },
@@ -172,11 +265,10 @@ const Settings = () => {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
-                activeTab === item.id 
-                  ? 'bg-accent text-accent-foreground' 
-                  : 'hover:bg-accent/50'
-              }`}
+              className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${activeTab === item.id
+                ? 'bg-accent text-accent-foreground'
+                : 'hover:bg-accent/50'
+                }`}
             >
               <div className="flex items-center gap-3">
                 <item.icon className="h-5 w-5" />
@@ -477,6 +569,139 @@ const Settings = () => {
                 </Button>
               </CardContent>
             </Card>
+          )}
+
+          {/* GDPR - Real-time Privacy & Data Export/Deletion */}
+          {activeTab === 'data' && (
+            <>
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>Privacy & Data</CardTitle>
+                  <CardDescription>Manage your data and privacy rights (GDPR)</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div>
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <Label className="text-base">Export My Data</Label>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Download a complete copy of all your data in JSON format
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleExportData}
+                      variant="outline"
+                      className="w-full sm:w-auto mt-2"
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Exporting...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4 mr-2" />
+                          Download My Data
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Danger Zone - Account Deletion (Real-time with 30-day grace) */}
+              <Card className="border-red-500/50">
+                <CardHeader>
+                  <CardTitle className="text-red-600 dark:text-red-400 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5" />
+                    Danger Zone
+                  </CardTitle>
+                  <CardDescription>
+                    Irreversible actions that affect your account
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Once you delete your account, there is a 30-day grace period. After 30 days, all your data will be permanently deleted.
+                    </p>
+                    <Button
+                      onClick={() => setShowDeleteDialog(true)}
+                      variant="destructive"
+                      className="w-full sm:w-auto"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete My Account
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Delete Account Confirmation Dialog */}
+              <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Delete Account</DialogTitle>
+                    <DialogDescription>
+                      This action schedules your account for deletion. You have 30 days to change your mind.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4 mt-4">
+                    <div>
+                      <Label htmlFor="delete-password">Confirm Your Password</Label>
+                      <Input
+                        id="delete-password"
+                        type="password"
+                        placeholder="Enter your password"
+                        value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="delete-confirmation">Type "DELETE MY ACCOUNT" to confirm</Label>
+                      <Input
+                        id="delete-confirmation"
+                        placeholder="DELETE MY ACCOUNT"
+                        value={deleteConfirmation}
+                        onChange={(e) => setDeleteConfirmation(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        onClick={() => {
+                          setShowDeleteDialog(false)
+                          setDeletePassword('')
+                          setDeleteConfirmation('')
+                        }}
+                        variant="outline"
+                        disabled={isDeleting}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleDeleteAccount}
+                        variant="destructive"
+                        disabled={isDeleting || deleteConfirmation !== 'DELETE MY ACCOUNT'}
+                      >
+                        {isDeleting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Deleting...
+                          </>
+                        ) : (
+                          'Yes, Delete My Account'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
 
           {activeTab === 'appearance' && (

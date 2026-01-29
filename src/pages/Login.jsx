@@ -6,28 +6,48 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
+import ReCAPTCHA from 'react-google-recaptcha'
+import GoogleLoginButton from '@/components/GoogleLoginButton'
+import FacebookLoginButton from '@/components/FacebookLoginButton'
 
 const Login = () => {
-  const [email, setEmail] = useState('')
+  const [loginValue, setLoginValue] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [recaptchaToken, setRecaptchaToken] = useState('')
   const { login } = useAuth()
   const navigate = useNavigate()
   const { toast } = useToast()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    // Real-time validation: reCAPTCHA required
+    if (!recaptchaToken) {
+      toast({
+        title: 'Verification Required',
+        description: 'Please complete the reCAPTCHA verification',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setIsLoading(true)
 
     try {
-      await login({ email, password })
+      // Include reCAPTCHA token
+      await login({ login: loginValue, password, recaptcha_token: recaptchaToken })
       toast({
         title: 'Welcome back!',
         description: 'You have successfully logged in.',
       })
-      navigate('/')
+      navigate('/', { replace: true })
     } catch (err) {
+      console.error('Login error:', err)
+      console.error('Error response:', err.response)
+      console.error('Error data:', err.response?.data)
+
       toast({
         title: 'Login failed',
         description: err.response?.data?.message || 'Invalid credentials',
@@ -48,15 +68,31 @@ const Login = () => {
             <p className="text-muted-foreground">Sign in to your account</p>
           </div>
 
+          {/* Google Sign-In */}
+          <GoogleLoginButton mode="login" />
+
+          {/* Facebook Sign-In */}
+          <FacebookLoginButton mode="login" />
+
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="login">Email or Username</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="login"
+                type="text"
+                placeholder="email or username"
+                value={loginValue}
+                onChange={(e) => setLoginValue(e.target.value)}
                 required
                 disabled={isLoading}
                 className="h-12"
@@ -95,6 +131,17 @@ const Login = () => {
                 Forgot password?
               </Link>
             </div>
+
+            {/* reCAPTCHA - Real-time Bot Protection */}
+            {import.meta.env.VITE_RECAPTCHA_SITE_KEY && (
+              <div className="flex justify-center">
+                <ReCAPTCHA
+                  sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                  onChange={setRecaptchaToken}
+                  theme="light"
+                />
+              </div>
+            )}
 
             <Button
               type="submit"

@@ -1,0 +1,28 @@
+# Daloy Cron Jobs Configuration
+# Copy to /etc/cron.d/daloy on production server
+
+# Database Backup - Daily at 2:00 AM
+0 2 * * * root /usr/local/bin/backup-daloy.sh >> /var/log/daloy-backup.log 2>&1
+
+# Backup Monitoring - Every 6 hours
+0 */6 * * * root /usr/local/bin/monitor-backups.sh >> /var/log/daloy-backup-monitor.log 2>&1
+
+# Laravel Queue Worker - Restart every hour (if using supervisor, this is redundant)
+# 0 * * * * www-data cd /var/www/daloy/backend && php artisan queue:restart
+
+# Laravel Schedule Runner - Every minute (for scheduled tasks)
+* * * * * www-data cd /var/www/daloy/backend && php artisan schedule:run >> /dev/null 2>&1
+
+# Clear expired sessions - Daily at 3:00 AM
+0 3 * * * www-data cd /var/www/daloy/backend && php artisan session:gc
+
+# Clear expired rate limit entries - Daily at 4:00 AM
+0 4 * * * www-data cd /var/www/daloy/backend && php artisan cache:prune-stale-tags
+
+# Application logs rotation (weekly cleanup)
+0 0 * * 0 root find /var/www/daloy/backend/storage/logs -name "*.log" -mtime +30 -delete
+
+# Nginx logs rotation is handled by logrotate
+
+# Optional: Upload backups to S3 - Weekly on Sunday at 5:00 AM
+# 0 5 * * 0 root aws s3 sync /var/backups/daloy s3://your-bucket/daloy-backups/ --exclude "*" --include "daloy_backup_*.sql.gz"

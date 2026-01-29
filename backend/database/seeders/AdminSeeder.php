@@ -13,22 +13,26 @@ class AdminSeeder extends Seeder
      */
     public function run(): void
     {
-        Admin::create([
-            'name' => 'Super Admin',
-            'username' => 'superadmin',
-            'email' => 'admin@daloy.app',
-            'password' => Hash::make('admin123'),
-            'role' => 'super_admin',
-            'is_active' => true,
-        ]);
+        Admin::updateOrCreate(
+            ['email' => 'admin@daloy.app'],
+            [
+                'name' => 'Admin',
+                'username' => 'admin',
+                'password' => Hash::make('admin123'),
+                'role' => 'super_admin',
+                'is_active' => true,
+            ]
+        );
 
-        Admin::create([
-            'name' => 'Moderator',
-            'username' => 'moderator',
-            'email' => 'mod@daloy.app',
-            'password' => Hash::make('mod123'),
-            'role' => 'moderator',
-            'is_active' => true,
-        ]);
+        Admin::updateOrCreate(
+            ['email' => 'mod@daloy.app'],
+            [
+                'name' => 'Moderator',
+                'username' => 'moderator',
+                'password' => Hash::make('mod123'),
+                'role' => 'moderator',
+                'is_active' => true,
+            ]
+        );
     }
 }
