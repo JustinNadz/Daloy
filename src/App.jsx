@@ -21,6 +21,7 @@ import ResetPassword from "./pages/ResetPassword";
 import GoogleCallback from "./pages/GoogleCallback";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
+import Groups from "./pages/Groups";
 import CookieConsent from "./components/CookieConsent";
 import { Loader2 } from "lucide-react";
 import { useInitializeEcho } from "@/hooks/useRealTime";
@@ -137,6 +138,14 @@ const AppRoutes = () => (
       element={
         <ProtectedRoute>
           <Search />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/groups"
+      element={
+        <ProtectedRoute>
+          <Groups />
         </ProtectedRoute>
       }
     />

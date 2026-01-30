@@ -29,7 +29,7 @@ const echo = new Echo({
 
 // Update auth headers when token changes
 export const updateEchoAuth = (token) => {
-    if (echo.connector && echo.connector.pusher) {
+    if (echo?.connector?.pusher?.config?.auth?.headers) {
         echo.connector.pusher.config.auth.headers.Authorization = `Bearer ${token}`;
     }
 };

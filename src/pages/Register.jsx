@@ -8,7 +8,6 @@ import { useToast } from '@/hooks/use-toast'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
 import ReCAPTCHA from 'react-google-recaptcha'
 import GoogleLoginButton from '@/components/GoogleLoginButton'
-import FacebookLoginButton from '@/components/FacebookLoginButton'
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -114,8 +113,6 @@ const Register = () => {
           {/* Google Sign-Up */}
           <GoogleLoginButton mode="signup" />
 
-          {/* Facebook Sign-Up */}
-          <FacebookLoginButton mode="signup" />
 
           {/* Divider */}
           <div className="relative my-6">

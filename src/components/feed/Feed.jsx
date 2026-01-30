@@ -9,7 +9,7 @@ import { Loader2 } from "lucide-react";
 const formatTime = (dateString) => {
   if (!dateString) return '';
   if (dateString === 'now') return 'now';
-  
+
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now - date;
@@ -22,7 +22,7 @@ const formatTime = (dateString) => {
   if (diffMins < 60) return `${diffMins}m`;
   if (diffHours < 24) return `${diffHours}h`;
   if (diffDays < 7) return `${diffDays}d`;
-  
+
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
@@ -33,8 +33,8 @@ const Feed = ({ activeTab, onTabChange }) => {
   // Fetch posts based on active tab
   const { data, isLoading, error } = useQuery({
     queryKey: ['feed', activeTab],
-    queryFn: () => activeTab === 'following' 
-      ? postService.getFeed() 
+    queryFn: () => activeTab === 'following'
+      ? postService.getFeed()
       : postService.getExplore(),
   });
 
@@ -59,7 +59,7 @@ const Feed = ({ activeTab, onTabChange }) => {
 
   // Like mutation
   const likeMutation = useMutation({
-    mutationFn: ({ postId, isLiked }) => 
+    mutationFn: ({ postId, isLiked }) =>
       isLiked ? postService.unlikePost(postId) : postService.likePost(postId),
     onSuccess: () => {
       queryClient.invalidateQueries(['feed']);
@@ -102,6 +102,9 @@ const Feed = ({ activeTab, onTabChange }) => {
 
   const posts = data?.data?.posts || data?.data?.data || [];
 
+  // Safety check: ensure posts is always an array
+  const postsArray = Array.isArray(posts) ? posts : [];
+
   return (
     <div className="flex-1 min-w-0 max-w-[600px] py-3">
       {/* Tabs */}
@@ -109,8 +112,8 @@ const Feed = ({ activeTab, onTabChange }) => {
         <div className="flex">
           <button
             className={`flex-1 py-4 text-sm font-medium transition-all duration-200 relative ${activeTab === "foryou"
-                ? 'text-foreground font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              ? 'text-foreground font-semibold'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
             onClick={() => onTabChange("foryou")}
           >
@@ -121,8 +124,8 @@ const Feed = ({ activeTab, onTabChange }) => {
           </button>
           <button
             className={`flex-1 py-4 text-sm font-medium transition-all duration-200 relative ${activeTab === "following"
-                ? 'text-foreground font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              ? 'text-foreground font-semibold'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
             onClick={() => onTabChange("following")}
           >
@@ -152,7 +155,7 @@ const Feed = ({ activeTab, onTabChange }) => {
       )}
 
       {/* Empty state */}
-      {!isLoading && !error && posts.length === 0 && (
+      {!isLoading && !error && postsArray.length === 0 && (
         <div className="bg-card rounded-2xl p-8 text-center">
           <p className="text-muted-foreground mb-2">No posts yet</p>
           <p className="text-sm text-muted-foreground">
@@ -165,7 +168,7 @@ const Feed = ({ activeTab, onTabChange }) => {
 
       {/* Posts */}
       <div className="space-y-0">
-        {posts.map((post) => (
+        {postsArray.map((post) => (
           <PostCard
             key={post.id}
             id={post.id}

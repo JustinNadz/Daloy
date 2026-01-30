@@ -96,17 +96,20 @@ class SearchController extends Controller
 
         $limit = $validated['limit'] ?? 10;
 
-        $hashtags = Hashtag::trending(24)
+        // Get trending hashtags (most used in last 24 hours)
+        $hashtags = Hashtag::orderByDesc('posts_count')
             ->limit($limit)
             ->get();
 
-        return $this->success([
-            'hashtags' => $hashtags->map(fn ($h) => [
-                'id' => $h->id,
-                'name' => $h->name,
-                'slug' => $h->slug,
-                'posts_count' => $h->posts_count,
-            ]),
+        return response()->json([
+            'data' => [
+                'hashtags' => $hashtags->map(fn($h) => [
+                    'id' => $h->id,
+                    'name' => $h->name,
+                    'slug' => $h->slug,
+                    'posts_count' => $h->posts_count,
+                ])
+            ]
         ]);
     }
 
@@ -125,7 +128,7 @@ class SearchController extends Controller
             ->latest()
             ->paginate(20);
 
-        return $this->paginated($posts->through(fn ($post) => [
+        return $this->paginated($posts->through(fn($post) => [
             'id' => $post->id,
             'content' => $post->content,
             'user' => [
@@ -135,7 +138,7 @@ class SearchController extends Controller
                 'avatar_url' => $post->user->avatar_url,
                 'is_verified' => $post->user->is_verified,
             ],
-            'media' => $post->media->map(fn ($m) => [
+            'media' => $post->media->map(fn($m) => [
                 'id' => $m->id,
                 'type' => $m->type,
                 'url' => $m->url,
@@ -154,15 +157,15 @@ class SearchController extends Controller
         $excludeIds = array_merge($blockedIds, $blockedByIds);
 
         $users = User::where(function ($q) use ($query) {
-                $q->where('username', 'like', "%{$query}%")
-                    ->orWhere('display_name', 'like', "%{$query}%");
-            })
+            $q->where('username', 'like', "%{$query}%")
+                ->orWhere('display_name', 'like', "%{$query}%");
+        })
             ->whereNotIn('id', $excludeIds)
             ->where('is_active', true)
             ->limit($limit)
             ->get();
 
-        return $users->map(fn ($u) => [
+        return $users->map(fn($u) => [
             'id' => $u->id,
             'username' => $u->username,
             'display_name' => $u->display_name,
@@ -189,7 +192,7 @@ class SearchController extends Controller
             ->limit($limit)
             ->get();
 
-        return $posts->map(fn ($p) => [
+        return $posts->map(fn($p) => [
             'id' => $p->id,
             'content' => $p->content,
             'user' => [
@@ -213,7 +216,7 @@ class SearchController extends Controller
             ->limit($limit)
             ->get();
 
-        return $hashtags->map(fn ($h) => [
+        return $hashtags->map(fn($h) => [
             'id' => $h->id,
             'name' => $h->name,
             'slug' => $h->slug,

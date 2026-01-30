@@ -33,7 +33,7 @@ class PostController extends Controller
             ->latest()
             ->paginate(20);
 
-        return $this->paginated($posts->through(fn ($post) => $this->formatPost($post, $user)));
+        return $this->paginated($posts->through(fn($post) => $this->formatPost($post, $user)));
     }
 
     /**
@@ -52,7 +52,7 @@ class PostController extends Controller
             ->orderByDesc('created_at')
             ->paginate(20);
 
-        return $this->paginated($posts->through(fn ($post) => $this->formatPost($post, $user)));
+        return $this->paginated($posts->through(fn($post) => $this->formatPost($post, $user)));
     }
 
     /**
@@ -60,18 +60,29 @@ class PostController extends Controller
      */
     public function publicFeed(Request $request)
     {
-        $posts = Post::with(['user', 'media', 'originalPost.user', 'quotedPost.user'])
-            ->withCount(['reactions', 'comments', 'reposts'])
-            ->whereNull('parent_id')
-            ->where('privacy', 'public')
-            ->whereHas('user', function ($query) {
-                $query->where('is_active', true)
-                    ->where('is_suspended', false);
-            })
-            ->latest()
-            ->paginate(20);
+        $posts = Post::with(['user'])->where('privacy', 'public')->latest()->limit(10)->get();
 
-        return $this->paginated($posts->through(fn ($post) => $this->formatPostPublic($post)));
+        $formattedPosts = $posts->map(function ($post) {
+            return [
+                'id' => $post->id,
+                'content' => $post->content,
+                'created_at' => $post->created_at,
+                'user' => [
+                    'username' => $post->user->username,
+                    'display_name' => $post->user->display_name,
+                    'avatar_url' => $post->user->avatar_url ?? null,
+                ],
+                'reactions_count' => 0,
+                'comments_count' => 0,
+                'reposts_count' => 0,
+            ];
+        })->toArray();
+
+        return response()->json([
+            'data' => [
+                'posts' => array_values($formattedPosts)
+            ]
+        ]);
     }
 
     /**
@@ -111,7 +122,7 @@ class PostController extends Controller
                 'avatar' => $post->user->avatar_url,
                 'is_verified' => $post->user->is_verified,
             ] : null,
-            'media' => $post->media->map(fn ($m) => [
+            'media' => $post->media->map(fn($m) => [
                 'id' => $m->id,
                 'type' => $m->type,
                 'url' => $m->url,
@@ -266,7 +277,7 @@ class PostController extends Controller
             ->latest()
             ->paginate(20);
 
-        return $this->paginated($comments->through(fn ($comment) => $this->formatPost($comment, $user)));
+        return $this->paginated($comments->through(fn($comment) => $this->formatPost($comment, $user)));
     }
 
     /**
@@ -382,7 +393,7 @@ class PostController extends Controller
         $user = $request->user();
 
         $repost = $user->posts()->where('original_post_id', $post->id)->where('is_repost', true)->first();
-        
+
         if (!$repost) {
             return $this->error('You have not reposted this post', 400);
         }
@@ -451,7 +462,7 @@ class PostController extends Controller
             ->latest()
             ->paginate(20);
 
-        return $this->paginated($posts->through(fn ($post) => $this->formatPost($post, $authUser)));
+        return $this->paginated($posts->through(fn($post) => $this->formatPost($post, $authUser)));
     }
 
     /**
@@ -482,7 +493,7 @@ class PostController extends Controller
     private function processHashtags(Post $post): void
     {
         $hashtags = $post->extractHashtags();
-        
+
         foreach ($hashtags as $tag) {
             $hashtag = Hashtag::findOrCreateByName($tag);
             $post->hashtags()->attach($hashtag->id);
@@ -496,10 +507,10 @@ class PostController extends Controller
     private function processMentions(Post $post, User $author): void
     {
         $usernames = $post->extractMentions();
-        
+
         foreach ($usernames as $username) {
             $mentionedUser = User::where('username', $username)->first();
-            
+
             if ($mentionedUser && $mentionedUser->id !== $author->id) {
                 $post->mentions()->create([
                     'user_id' => $mentionedUser->id,
@@ -559,7 +570,7 @@ class PostController extends Controller
                 'avatar_url' => $post->user->avatar_url,
                 'is_verified' => $post->user->is_verified,
             ],
-            'media' => $post->media->map(fn ($m) => [
+            'media' => $post->media->map(fn($m) => [
                 'id' => $m->id,
                 'type' => $m->type,
                 'url' => $m->url,
@@ -585,5 +596,37 @@ class PostController extends Controller
         }
 
         return $data;
+    }
+
+    /**
+     * Format post for public API response (no authentication required).
+     */
+    private function formatPostForPublic(Post $post): array
+    {
+        return [
+            'id' => $post->id,
+            'content' => $post->content,
+            'privacy' => $post->privacy,
+            'created_at' => $post->created_at->toISOString(),
+            'user' => [
+                'id' => $post->user->id,
+                'username' => $post->user->username,
+                'display_name' => $post->user->display_name,
+                'avatar_url' => $post->user->avatar_url,
+                'is_verified' => $post->user->is_verified ?? false,
+            ],
+            'media' => $post->media->map(fn($m) => [
+                'id' => $m->id,
+                'type' => $m->type,
+                'url' => $m->url,
+            ])->toArray(),
+            'reactions_count' => $post->reactions_count ?? 0,
+            'comments_count' => $post->comments_count ?? 0,
+            'reposts_count' => $post->reposts_count ?? 0,
+            // For public feed, user interaction states are false
+            'is_liked' => false,
+            'is_bookmarked' => false,
+            'is_reposted' => false,
+        ];
     }
 }

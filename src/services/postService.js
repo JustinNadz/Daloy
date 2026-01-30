@@ -6,7 +6,7 @@ export const postService = {
   },
 
   async getExplore(page = 1) {
-    return api.get('/posts/explore', { params: { page } })
+    return api.get('/posts/public', { params: { page } })
   },
 
   async getPost(id) {
@@ -18,7 +18,7 @@ export const postService = {
     formData.append('content', content)
     formData.append('privacy', privacy)
     media.forEach((file) => formData.append('media[]', file))
-    
+
     return api.post('/posts', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
@@ -40,7 +40,7 @@ export const postService = {
     const formData = new FormData()
     formData.append('content', content)
     media.forEach((file) => formData.append('media[]', file))
-    
+
     return api.post(`/posts/${postId}/comments`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })

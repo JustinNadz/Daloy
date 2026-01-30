@@ -74,6 +74,14 @@ Route::prefix('auth')->group(function () {
     });
 });
 
+// Test route
+Route::get('/test', function () {
+    return response()->json(['message' => 'API is working!', 'timestamp' => now()]);
+});
+
+// Search
+Route::get('/search/trending', [SearchController::class, 'trending']);
+
 // Public posts (explore/trending)
 Route::get('/posts/public', [PostController::class, 'publicFeed']);
 Route::get('/posts/{post}', [PostController::class, 'showPublic'])->name('posts.show.public');
